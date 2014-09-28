@@ -8,10 +8,10 @@
 # -don't use eval in sub movepix
 # -bind alt-1 through alt-9 to speed selection
 # -bind alt-x to exit
-# -use entry fields to change heading and speed. bind cr to execute the new entry
+# -use entry fields to change heading and speed. bind cr to execute new entry
 # -use degree symbol in the heading
 
-# Include the Tk and serial port modules
+# Include the Tk and serial port module
 use Tk;
 require Tk::Dialog;
 use Device::SerialPort qw( :STAT 0.07 );
@@ -29,10 +29,8 @@ $EN71_11469_GIF = './11469.gif';
 
 # send an opcode and get raw data back from rotor
 # returns 1 on success, 0 otherwise
-sub query_rotor ($$$) {
-  my $command = shift;
-  my $result_ref = shift;
-  my $size = shift;		# size of data expected
+sub query_rotor {
+  my ($command, $result_ref, $size) = @_;
 
   $ob -> write($command);
 
@@ -44,9 +42,11 @@ sub query_rotor ($$$) {
   return 0
 }
 
+
 # update GUI
-sub repeat_handler ($$$$) {
+sub repeat_handler {
   my ($canv,$line_ref,$text_direction_ref,$text_speed_ref) = @_;
+
   my $result;
   my ($x,$y,$radians);
   query_rotor("\r",\$result,19);
@@ -73,6 +73,7 @@ sub repeat_handler ($$$$) {
   unless ($new_speed = $speed) { $ob->write("s$new_speed\r") }
 }
 
+
 # draw a line through the coordinates passed to the compas rose
 sub heading_line {
   my ($line_ref,$canv,$cx,$cy,$color) = @_;
@@ -83,14 +84,16 @@ sub heading_line {
   $$line_ref = $canv->createLine(0,0,$rx,$ry,-fill => $color, -width => 3);
 }
 
+
 # called when button 1 is double clicked; aims the rotator at cursor position
 # and draws a red line to compass rose
-sub aim_it ($$$$) {
+sub aim_it {
   my ($canv, $x, $y, $line_ref) = @_;
   my $cx = $canv->canvasx($x);
   my $cy = $canv->canvasy($y); # y-axis is upside down from conventional system
   my $deg = atan2($cy,$cx)*360/(3.14159265359*2);
-  # compass has 0 degrees at north, not east. 2nd quadrant needs +90+360, others +90
+  # compass has 0 degrees at north, not east. 2nd quadrant needs +90+360,
+  # others +90
   $deg = ($deg <-90) ? int ($deg+450) : int($deg + 90); 
 
   # place a red line at the selected heading
@@ -99,8 +102,10 @@ sub aim_it ($$$$) {
   $ob->write("$deg\r");
 }
 
-# bound to mouse movement; draws a black line through mouse position to compass rose
-sub prelim_aim ($$$$) {
+
+# bound to mouse movement; draws a black line through mouse position to
+# compass rose
+sub prelim_aim {
   my ($canv, $x, $y, $line_ref) = @_;
   my $cx = $canv->canvasx($x);
   my $cy = $canv->canvasy($y); # y-axis is upside down from conventional system
@@ -112,10 +117,12 @@ sub prelim_aim ($$$$) {
   heading_line($line_ref,$canv,$cx,$cy,"black");
 }
 
+
 sub exit_gracefully {
   undef $ob;
   exit;
 }
+
 
 # scroll the picture around using keys bound to this subroutine
 sub movepix {
@@ -127,11 +134,11 @@ sub movepix {
   my $units = shift;
   # this is lame, $"$widget" has to be global
   eval ("\$$widget->$whichway"."view($command,$amount,$units)");
-
 }
 
+
 # change the map
-sub set_range ($$$) {
+sub set_range {
   my ($canvas,$pix,$pix_id_ref) = @_;
   my $sw_canvas = $canvas->Subwidget("canvas");
 
@@ -145,36 +152,39 @@ sub set_range ($$$) {
   $canvas->yview('moveto',0.24);
 }
 
+
 # changes the rotor speed.
-sub set_speed ($) {
+sub set_speed {
   my ($speed) = @_;
   $ob->write("s$speed\r");  # rotor has bug where occassionally the command is
   $ob->write("s$speed\r");  # ignored.  workaround is to send the command
   $ob->write("s$speed\r");  # three times...
 }
 
+
 ########################## main #########################
-$ob = new Device::SerialPort ('/dev/ttyS1') || die "Can't open /dev/ttyS1: $^E\n";
+my $port = '/dev/ttyS1';
+$ob = new Device::SerialPort($port) || die "Can't open $port: $^E\n";
 
 $ob->databits(8);
 $ob->baudrate(9600);
 $ob->parity("none");
 $ob->stopbits(1);
 $ob->handshake("none");
-#$ob->buffers(4096, 4096);
 
 $ob->write_settings || undef $PortObj;
 
 $ob->save($COM_PORT_CONFIG_FILE);
 
-#$ob->read_interval(0);
 $ob->read_const_time(50);
 
 $mw = new MainWindow;
 $mw->title("M^2 Rotor control");
 
-$canvas = $mw->Scrolled('Canvas', -height =>480, -width => 640, -scrollbars => 'se');
-$canvas->pack(-side => 'bottom', -anchor => 'center', -expand => 1, -fill => 'both');
+$canvas = $mw->Scrolled('Canvas', -height =>480, -width => 640,
+                        -scrollbars => 'se');
+$canvas->pack(-side => 'bottom', -anchor => 'center', -expand => 1,
+              -fill => 'both');
 
 # The three different ranges
 $PIX_1 = $canvas->Photo(-file => $EN71_745_GIF);
@@ -205,8 +215,10 @@ $mw->bind("<Key-Next>", [ sub { $canvas->yview('moveto',1)} ] );
 
 # have to bind to stuff in the canvas, not the canvas itself
 $sw_canvas = $canvas->Subwidget("canvas");
-$sw_canvas->Tk::bind("<Double-Button-1>", [ \&aim_it, Ev('x'), Ev('y'), \$desired_dir ]);
-$sw_canvas->Tk::bind("<Motion>", [ \&prelim_aim,  Ev('x'), Ev('y'), \$prelim_dir ]);
+$sw_canvas->Tk::bind("<Double-Button-1>",
+                     [ \&aim_it, Ev('x'), Ev('y'), \$desired_dir ]);
+$sw_canvas->Tk::bind("<Motion>",
+                    [ \&prelim_aim,  Ev('x'), Ev('y'), \$prelim_dir ]);
 $sw_canvas->Tk::bind("<Leave>", [ sub { $canvas->delete($prelim_dir) }]);
 
 # create frame for menus along the very top
