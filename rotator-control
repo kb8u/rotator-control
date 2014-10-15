@@ -1,40 +1,43 @@
-#!/usr/bin/perl
+#!/usr/bin/perl -w
 # Aim an M2 rotor using a GUI and map
 # Written September 24, 2014 and copyright by Russell Dwarshuis, KB8U
 # See the LICENSE files for terms of use.
 
 # stuff to add or re-write:
-# -shouldn't have $ob be global
+# -map and serial port configuration
 # -don't use eval in sub movepix
 # -bind alt-1 through alt-9 to speed selection
 # -bind alt-x to exit
 # -use entry fields to change heading and speed. bind cr to execute new entry
 # -use degree symbol in the heading
 
-# Include the Tk and serial port module
+use strict;
+use English;
 use Tk;
 require Tk::Dialog;
 use Device::SerialPort qw( :STAT 0.07 );
+
+our $sp;
 # File holding serial port configuration information used by Device::SerialPort
-$COM_PORT_CONFIG_FILE = 'rotor.cfg';
+my $COM_PORT_CONFIG_FILE = 'rotor.cfg';
 
 # compass rose outer radius in pixels
-$RADIUS = 417;
+my $RADIUS = 417;
 # .gif's of different ranges from station location
-$EN71_745_GIF = './745.gif';
-$EN71_1371_GIF = './2117.gif';
-$EN71_2117_GIF = './2117.gif';
-$EN71_5815_GIF = './5815.gif';
-$EN71_11469_GIF = './11469.gif';
+my $EN71_745_GIF = './745.gif';
+my $EN71_1371_GIF = './2117.gif';
+my $EN71_2117_GIF = './2117.gif';
+my $EN71_5815_GIF = './5815.gif';
+my $EN71_11469_GIF = './11469.gif';
 
 # send an opcode and get raw data back from rotor
 # returns 1 on success, 0 otherwise
 sub query_rotor {
   my ($command, $result_ref, $size) = @_;
 
-  $ob -> write($command);
+  $sp -> write($command);
 
-  my ($count_in, $string_in) = $ob->read($size);
+  my ($count_in, $string_in) = $sp->read($size);
   $$result_ref = $string_in;
   return 1 if $count_in == $size;
 
@@ -51,7 +54,7 @@ sub repeat_handler {
   my ($x,$y,$radians);
   query_rotor("\r",\$result,19);
 
-  my ($a,$dummy,$limit_flag,$heading,$dummy,$speed,$dummy,$movement) = 
+  my ($a,undef,$limit_flag,$heading,undef,$speed,undef,$movement) = 
     unpack "A A2 A2 A5 A3 A A A2",$result;
   # check for invalid input
   unless ($a eq 'A') { return }
@@ -70,18 +73,25 @@ sub repeat_handler {
   $canv->delete($$line_ref);
   $$line_ref = $canv->createLine(0,0,$x,$y,-fill => 'green', -width => 3);
   $$text_speed_ref = $speed;
-  unless ($new_speed = $speed) { $ob->write("s$new_speed\r") }
+# BUG: speed doesn't show correcty
+#  unless ($new_speed = $speed) { $sp->write("s$new_speed\r") }
 }
 
 
 # draw a line through the coordinates passed to the compas rose
 sub heading_line {
-  my ($line_ref,$canv,$cx,$cy,$color) = @_;
+  my ($args) = @_;
+  my $line_ref = $args->{line_ref};
+  my $canvas = $args->{canvas};
+  my $cx = $args->{cx};
+  my $cy = $args->{cy};
+  my $color = $args->{color};
+
   my $angle = atan2($cy,$cx);
   my $rx = $RADIUS * cos $angle;
   my $ry = $RADIUS * sin $angle;
-  $canv->delete($$line_ref);
-  $$line_ref = $canv->createLine(0,0,$rx,$ry,-fill => $color, -width => 3);
+  $canvas->delete($$line_ref);
+  $$line_ref = $canvas->createLine(0,0,$rx,$ry,-fill => $color, -width => 3);
 }
 
 
@@ -97,9 +107,14 @@ sub aim_it {
   $deg = ($deg <-90) ? int ($deg+450) : int($deg + 90); 
 
   # place a red line at the selected heading
-  heading_line($line_ref,$canv,$cx,$cy,"red");
+  my $args = { line_ref => $line_ref,
+               canvas => $canv,
+               cx => $cx,
+               cy => $cy,
+               color => 'red' };
+  heading_line($args);
   $deg = int $deg;
-  $ob->write("$deg\r");
+  $sp->write("$deg\r");
 }
 
 
@@ -114,12 +129,17 @@ sub prelim_aim {
   $deg = ($deg <-90) ? int ($deg+450) : int($deg + 90); 
 
   # place a black line at the selected heading
-  heading_line($line_ref,$canv,$cx,$cy,"black");
+  my $args = { line_ref => $line_ref,
+               canvas => $canv,
+               cx => $cx,
+               cy => $cy,
+               color => 'black' };
+  heading_line($args);
 }
 
 
 sub exit_gracefully {
-  undef $ob;
+  undef $sp;
   exit;
 }
 
@@ -156,42 +176,44 @@ sub set_range {
 # changes the rotor speed.
 sub set_speed {
   my ($speed) = @_;
-  $ob->write("s$speed\r");  # rotor has bug where occassionally the command is
-  $ob->write("s$speed\r");  # ignored.  workaround is to send the command
-  $ob->write("s$speed\r");  # three times...
+  $sp->write("s$speed\r");  # rotor has bug where occassionally the command is
+  $sp->write("s$speed\r");  # ignored.  workaround is to send the command
+  $sp->write("s$speed\r");  # three times...
 }
 
 
 ########################## main #########################
 my $port = '/dev/ttyS1';
-$ob = new Device::SerialPort($port) || die "Can't open $port: $^E\n";
+$sp = new Device::SerialPort($port) || die "Can't open $port: $^E\n";
 
-$ob->databits(8);
-$ob->baudrate(9600);
-$ob->parity("none");
-$ob->stopbits(1);
-$ob->handshake("none");
+$sp->databits(8);
+$sp->baudrate(9600);
+$sp->parity("none");
+$sp->stopbits(1);
+$sp->handshake("none");
 
-$ob->write_settings || undef $PortObj;
+$sp->write_settings || die "Couldn't configure serial port $port";
 
-$ob->save($COM_PORT_CONFIG_FILE);
+$sp->save($COM_PORT_CONFIG_FILE);
 
-$ob->read_const_time(50);
+$sp->read_const_time(50);
 
-$mw = new MainWindow;
+my $mw = new MainWindow;
 $mw->title("M^2 Rotor control");
 
-$canvas = $mw->Scrolled('Canvas', -height =>480, -width => 640,
+my $canvas = $mw->Scrolled('Canvas', -height =>480, -width => 640,
                         -scrollbars => 'se');
 $canvas->pack(-side => 'bottom', -anchor => 'center', -expand => 1,
               -fill => 'both');
 
 # The three different ranges
-$PIX_1 = $canvas->Photo(-file => $EN71_745_GIF);
-$PIX_2 = $canvas->Photo(-file => $EN71_1371_GIF);
-$PIX_3 = $canvas->Photo(-file => $EN71_2117_GIF);
-$PIX_4 = $canvas->Photo(-file => $EN71_5815_GIF);
-$PIX_5 = $canvas->Photo(-file => $EN71_11469_GIF);
+my $PIX_1 = $canvas->Photo(-file => $EN71_745_GIF);
+my $PIX_2 = $canvas->Photo(-file => $EN71_1371_GIF);
+my $PIX_3 = $canvas->Photo(-file => $EN71_2117_GIF);
+my $PIX_4 = $canvas->Photo(-file => $EN71_5815_GIF);
+my $PIX_5 = $canvas->Photo(-file => $EN71_11469_GIF);
+
+my $pix_id;
 
 # draw a range to start with
 set_range($canvas,$PIX_1,\$pix_id);
@@ -214,7 +236,8 @@ $mw->bind("<Key-Prior>", [ sub { $canvas->yview('moveto',0)} ] );
 $mw->bind("<Key-Next>", [ sub { $canvas->yview('moveto',1)} ] );
 
 # have to bind to stuff in the canvas, not the canvas itself
-$sw_canvas = $canvas->Subwidget("canvas");
+my $sw_canvas = $canvas->Subwidget("canvas");
+my ($desired_dir,$prelim_dir);
 $sw_canvas->Tk::bind("<Double-Button-1>",
                      [ \&aim_it, Ev('x'), Ev('y'), \$desired_dir ]);
 $sw_canvas->Tk::bind("<Motion>",
@@ -222,7 +245,7 @@ $sw_canvas->Tk::bind("<Motion>",
 $sw_canvas->Tk::bind("<Leave>", [ sub { $canvas->delete($prelim_dir) }]);
 
 # create frame for menus along the very top
-$top_menu_frame = $mw->Frame
+my $top_menu_frame = $mw->Frame
   (
 
    -borderwidth => 2,
@@ -232,19 +255,20 @@ $top_menu_frame = $mw->Frame
 $top_menu_frame->pack(-side=>'top', -fill => 'x');
 $top_menu_frame->packPropagate(0);
 # place file and range menus in top_menu_frame
-$file_menu = $top_menu_frame->Menubutton
+my $file_menu = $top_menu_frame->Menubutton
   (
    -text => 'File',
    -tearoff => 0,
    -menuitems => [[ 'command' => "Exit", -command => \&exit_gracefully],]
   );
 $file_menu->pack(-side =>'left');
+my @range;
 $range[0]=['command'=>"745miles",-command=>[\&set_range,$canvas,$PIX_1,\$pix_id]];
 $range[1]=['command'=>"1371miles",-command=>[\&set_range,$canvas,$PIX_2,\$pix_id]];
 $range[2]=['command'=>"2117miles",-command=>[\&set_range,$canvas,$PIX_3,\$pix_id]];
 $range[3]=['command'=>"5815miles",-command=>[\&set_range,$canvas,$PIX_4,\$pix_id]];
 $range[4]=['command'=>"11469miles",-command=>[\&set_range,$canvas,$PIX_5,\$pix_id]];
-$range_menu = $top_menu_frame->Menubutton
+my $range_menu = $top_menu_frame->Menubutton
   (
    -text => 'Range',
    -tearoff => 0,
@@ -252,10 +276,11 @@ $range_menu = $top_menu_frame->Menubutton
   );
 $range_menu->pack(-side =>'left');
 
-for($i=0;$i<9;$i++) {
+my @speed;
+for(my $i=0; $i<9; $i++) {
   $speed[$i]=['command'=>$i+1,-command=>[\&set_speed,$i+1]];
 }
-$speed_menu = $top_menu_frame->Menubutton
+my $speed_menu = $top_menu_frame->Menubutton
   (
    -text => 'Speed',
    -tearoff => 0,
@@ -264,7 +289,7 @@ $speed_menu = $top_menu_frame->Menubutton
 $speed_menu->pack(-side =>'left');
 
 # a frame for the current beam heading, moving indicator and stop button
-$info_frame = $mw->Frame
+my $info_frame = $mw->Frame
   (
 
    -borderwidth => 2,
@@ -274,7 +299,8 @@ $info_frame = $mw->Frame
 $info_frame->pack(-side=>'top', -fill => 'x');
 $info_frame->packPropagate(0);
 # a text entry field for current or desired direction
-$direction_entry = $info_frame->Entry
+my $text_direction;
+my $direction_entry = $info_frame->Entry
   (
    -text => 'Beam heading',
    -textvariable => \$text_direction,
@@ -286,10 +312,11 @@ $direction_entry = $info_frame->Entry
   );
 # numeric indicator/input of beam heading
 $direction_entry->pack(-side =>'left');
-$dir_descr_text = $info_frame->Label(-text=>'Heading')->pack(-side =>'left');
+my $dir_descr_text = $info_frame->Label(-text=>'Heading')->pack(-side =>'left');
 
 # a text entry field for current or desired speed
-$speed_entry = $info_frame->Entry
+my $text_speed;
+my $speed_entry = $info_frame->Entry
   (
    -text => 'Speed',
    -textvariable => \$text_speed,
@@ -301,17 +328,18 @@ $speed_entry = $info_frame->Entry
   );
 # numeric indicator/input of beam heading
 $speed_entry->pack(-side =>'left');
-$speed_descr_text = $info_frame->Label(-text=>'Speed')->pack(-side =>'left');
+my $speed_descr_text = $info_frame->Label(-text=>'Speed')->pack(-side =>'left');
 
 # button/indicator to stop beam movment/indicates movement
-$stop_Button = $info_frame->Button
+my $stop_Button = $info_frame->Button
   (
    -text => 'STOP',
-   -command => [ sub { $ob->write("s\r") } ],
+   -command => [ sub { $sp->write("s\r") } ],
   );
 $stop_Button->pack(-side => 'left');
 $dir_descr_text = $info_frame->Label(-text=>'Movement')->pack(-side =>'left');
 
+my $beam_pointer;
 $mw->repeat(100,[\&repeat_handler,$canvas,\$beam_pointer,\$text_direction,\$text_speed]);
 
 MainLoop;
