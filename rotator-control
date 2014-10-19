@@ -17,6 +17,7 @@ use Tk;
 require Tk::Dialog;
 use Device::SerialPort qw( :STAT 0.07 );
 
+our $TAU = 6.28318530718; # 2 x pi
 our $sp;
 # File holding serial port configuration information used by Device::SerialPort
 my $COM_PORT_CONFIG_FILE = 'rotor.cfg';
@@ -67,7 +68,7 @@ sub repeat_handler {
   unless (($movement eq 'ST') || ($movement eq 'MV')) { return }
   $$text_direction_ref = int $heading;
   $heading -= 90; # adjust from rotors to Tk's idea of what angle represents
-  $radians = 2*3.14159*($heading/360); # cos, sin needs radians, not degrees
+  $radians = $TAU*($heading/360); # cos, sin needs radians, not degrees
   $x = int ($RADIUS * cos $radians);
   $y = int ($RADIUS * sin $radians);
   $canv->delete($$line_ref);
@@ -101,7 +102,7 @@ sub aim_it {
   my ($canv, $x, $y, $line_ref) = @_;
   my $cx = $canv->canvasx($x);
   my $cy = $canv->canvasy($y); # y-axis is upside down from conventional system
-  my $deg = atan2($cy,$cx)*360/(3.14159265359*2);
+  my $deg = atan2($cy,$cx)*360/$TAU;
   # compass has 0 degrees at north, not east. 2nd quadrant needs +90+360,
   # others +90
   $deg = ($deg <-90) ? int ($deg+450) : int($deg + 90); 
@@ -124,7 +125,7 @@ sub prelim_aim {
   my ($canv, $x, $y, $line_ref) = @_;
   my $cx = $canv->canvasx($x);
   my $cy = $canv->canvasy($y); # y-axis is upside down from conventional system
-  my $deg = atan2($cy,$cx)*360/(3.14159265359*2);
+  my $deg = atan2($cy,$cx)*360/$TAU;
   # compass has 0 degrees at north, not east. 2nd quadrant needs +90+360, others +90
   $deg = ($deg <-90) ? int ($deg+450) : int($deg + 90); 
 
@@ -135,6 +136,30 @@ sub prelim_aim {
                cy => $cy,
                color => 'black' };
   heading_line($args);
+}
+
+
+sub setup {
+  my ($mw,$setup_canvas) = @_;
+
+  if (! Exists($$setup_canvas)) {
+    $$setup_canvas = $$mw->Toplevel
+      (
+       -height => 100,
+       -width => 400,
+       -title => 'rotator-control setup',
+       -takefocus => 1,
+      );
+    $$setup_canvas->Button
+      (
+       -text => 'Close',
+       -command => sub { $$setup_canvas->withdraw},
+      )->pack;
+  }
+  else {
+    $$setup_canvas->deiconify();
+    $$setup_canvas->raise();
+  }
 }
 
 
@@ -277,8 +302,8 @@ my $range_menu = $top_menu_frame->Menubutton
 $range_menu->pack(-side =>'left');
 
 my @speed;
-for(my $i=0; $i<9; $i++) {
-  $speed[$i]=['command'=>$i+1,-command=>[\&set_speed,$i+1]];
+for(my $i=1; $i<10; $i++) {
+  $speed[$i]=['command'=>$i,-command=>[\&set_speed,$i]];
 }
 my $speed_menu = $top_menu_frame->Menubutton
   (
@@ -288,6 +313,14 @@ my $speed_menu = $top_menu_frame->Menubutton
   );
 $speed_menu->pack(-side =>'left');
 
+my $setup_canvas = 0;
+my $setup_button = $top_menu_frame->Button
+  (
+   -text => 'Setup',
+   -relief => 'flat',
+   -command => [\&setup,\$mw,\$setup_canvas]
+  );
+$setup_button->pack(-side => 'left');
 # a frame for the current beam heading, moving indicator and stop button
 my $info_frame = $mw->Frame
   (
