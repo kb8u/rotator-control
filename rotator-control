@@ -9,9 +9,9 @@
 # -bind alt-1 through alt-9 to speed selection
 # -bind alt-x to exit
 # -use entry fields to change heading and speed. bind cr to execute new entry
-# -use degree symbol in the heading
 
 use strict;
+use feature 'unicode_strings';
 use English;
 use Tk;
 require Tk::Dialog;
@@ -66,7 +66,7 @@ sub repeat_handler {
   unless ($heading =~ /\d{1,3}\.?\d?/) { return }
   unless (($speed>0) && ($speed <10)) { return }
   unless (($movement eq 'ST') || ($movement eq 'MV')) { return }
-  $$text_direction_ref = int $heading;
+  $$text_direction_ref = int($heading) . "\N{DEGREE SIGN}";
   $heading -= 90; # adjust from rotors to Tk's idea of what angle represents
   $radians = $TAU*($heading/360); # cos, sin needs radians, not degrees
   $x = int ($RADIUS * cos $radians);
@@ -74,8 +74,6 @@ sub repeat_handler {
   $canv->delete($$line_ref);
   $$line_ref = $canv->createLine(0,0,$x,$y,-fill => 'green', -width => 3);
   $$text_speed_ref = $speed;
-# BUG: speed doesn't show correcty
-#  unless ($new_speed = $speed) { $sp->write("s$new_speed\r") }
 }
 
 
@@ -169,19 +167,6 @@ sub exit_gracefully {
 }
 
 
-# scroll the picture around using keys bound to this subroutine
-sub movepix {
-  my $calling_widget = shift;
-  my $widget = shift;
-  my $command = shift;
-  my $whichway = shift;
-  my $amount = shift;
-  my $units = shift;
-  # this is lame, $"$widget" has to be global
-  eval ("\$$widget->$whichway"."view($command,$amount,$units)");
-}
-
-
 # change the map
 sub set_range {
   my ($canvas,$pix,$pix_id_ref) = @_;
@@ -224,7 +209,7 @@ $sp->save($COM_PORT_CONFIG_FILE);
 $sp->read_const_time(50);
 
 my $mw = new MainWindow;
-$mw->title("M^2 Rotor control");
+$mw->title("M\N{SUPERSCRIPT TWO} Rotor control");
 
 my $canvas = $mw->Scrolled('Canvas', -height =>480, -width => 640,
                         -scrollbars => 'se');
@@ -324,40 +309,39 @@ $setup_button->pack(-side => 'left');
 # a frame for the current beam heading, moving indicator and stop button
 my $info_frame = $mw->Frame
   (
-
    -borderwidth => 2,
    -height => 30,
    -width => 500,
   );
 $info_frame->pack(-side=>'top', -fill => 'x');
 $info_frame->packPropagate(0);
-# a text entry field for current or desired direction
+# a text entry field for current direction
 my $text_direction;
 my $direction_entry = $info_frame->Entry
   (
-   -text => 'Beam heading',
    -textvariable => \$text_direction,
-   -width => 3,
+   -width => 4,
    -font => "Arial 12 bold",
-   -foreground => "#00FF00",
+   -foreground => 'green',
    -background => 'black',
    -insertbackground => 'white',
+   -takefocus => 0,
   );
 # numeric indicator/input of beam heading
 $direction_entry->pack(-side =>'left');
 my $dir_descr_text = $info_frame->Label(-text=>'Heading')->pack(-side =>'left');
 
-# a text entry field for current or desired speed
+# a text entry field for current speed
 my $text_speed;
 my $speed_entry = $info_frame->Entry
   (
-   -text => 'Speed',
    -textvariable => \$text_speed,
    -width => 1,
    -font => "Arial 12 bold",
-   -foreground => "#00FF00",
+   -foreground => 'green',
    -background => 'black',
    -insertbackground => 'white',
+   -takefocus => 0,
   );
 # numeric indicator/input of beam heading
 $speed_entry->pack(-side =>'left');
