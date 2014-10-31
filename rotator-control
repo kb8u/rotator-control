@@ -14,7 +14,7 @@ use strict;
 use feature 'unicode_strings';
 use English;
 use Tk;
-require Tk::Dialog;
+use Tk::FileDialog;
 use Device::SerialPort qw( :STAT 0.07 );
 
 our $TAU = 6.28318530718; # 2 x pi
@@ -148,6 +148,10 @@ sub setup {
        -title => 'rotator-control setup',
        -takefocus => 1,
       );
+    my $file_dialog = $$setup_canvas->FileDialog(-Title => 'Select Map',
+                                                 -Create => 0,
+                                                 -FPat => '*.gif')
+                                    ->Show();
     $$setup_canvas->Button
       (
        -text => 'Close',

@@ -11,6 +11,7 @@ at this time.
 Required Ubuntu packages beyond stock distribution
 perl-tk
 libdevice-serialport-perl
+libtk-filedialog-perl
 
 Allow your user ID to access the serial port
 sudo usermod -a -G dialout $USER
