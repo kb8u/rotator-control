@@ -11,14 +11,24 @@
 # -use entry fields to change heading and speed. bind cr to execute new entry
 
 use strict;
-use feature 'unicode_strings';
+use feature qw(unicode_strings say);
 use English;
 use Tk;
 use Tk::FileDialog;
 use Device::SerialPort qw( :STAT 0.07 );
+use File::HomeDir;
+use Getopt::Std;
+$Getopt::Std::STANDARD_HELP_VERSION = 1; # so --help goes to stdout
+our $VERSION = '1.0.0';
 
 our $TAU = 6.28318530718; # 2 x pi
 our $sp;
+
+getopts('d:h');
+our ($opt_d,$opt_h);
+
+# directory for configuration file
+our $CONFIG_DIR = $opt_d ? $opt_d : File::HomeDir->my_data() .'/rotator-control';
 # File holding serial port configuration information used by Device::SerialPort
 my $COM_PORT_CONFIG_FILE = 'rotor.cfg';
 
@@ -30,6 +40,40 @@ my $EN71_1371_GIF = './2117.gif';
 my $EN71_2117_GIF = './2117.gif';
 my $EN71_5815_GIF = './5815.gif';
 my $EN71_11469_GIF = './11469.gif';
+
+
+my  $HELP = <<"EOH";
+command line options:
+  -d directory to hold configuration data.  Defaults to
+     $CONFIG_DIR
+     If this directory does not exist, it will be created.
+
+  -h Print help message
+
+Generate maps to show in the main window my going to:
+http://http://www2.wm7d.net/az_proj/az_html/azproj.shtml
+Save them to disk and set the location of them in the setup menu.
+
+Set the serial port (e.g. /dev/ttyUSB0 or /dev/ttyS1) in the setup menu.
+
+On linux, you will need to permit users to access the serial port by running
+the following command from a terminal:
+sudo usermod -a -G dialout \$USER
+EOH
+
+
+# can't use variables like $HELP in getopt's HELP_MESSAGE.  Why??
+sub HELP_MESSAGE {
+  say 'Use -h for help';
+  exit;
+}
+
+
+if ($opt_h) {
+  say $HELP;
+  exit;
+}
+
 
 # send an opcode and get raw data back from rotor
 # returns 1 on success, 0 otherwise
@@ -143,20 +187,23 @@ sub setup {
   if (! Exists($$setup_canvas)) {
     $$setup_canvas = $$mw->Toplevel
       (
-       -height => 100,
-       -width => 400,
        -title => 'rotator-control setup',
        -takefocus => 1,
       );
-    my $file_dialog = $$setup_canvas->FileDialog(-Title => 'Select Map',
-                                                 -Create => 0,
-                                                 -FPat => '*.gif')
-                                    ->Show();
+#    my $file_dialog = $$setup_canvas->FileDialog(-Title => 'Select Map',
+#                                                 -Create => 0,
+#                                                 -FPat => '*.gif')
+#                                    ->Show();
+    $$setup_canvas->Label(-text => 'Settings Directory')->grid
+      ($$setup_canvas->Entry(-textvariable => \$CONFIG_DIR,
+                             -width => 40),
+       $$setup_canvas->Button(-text => 'Directory...',
+                              -command => [ \&choose_conf_dir ]));
     $$setup_canvas->Button
       (
        -text => 'Close',
        -command => sub { $$setup_canvas->withdraw},
-      )->pack;
+      )->grid();
   }
   else {
     $$setup_canvas->deiconify();
@@ -364,3 +411,5 @@ my $beam_pointer;
 $mw->repeat(100,[\&repeat_handler,$canvas,\$beam_pointer,\$text_direction,\$text_speed]);
 
 MainLoop;
+
+
