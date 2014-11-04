@@ -22,6 +22,7 @@ $Getopt::Std::STANDARD_HELP_VERSION = 1; # so --help goes to stdout
 our $VERSION = '1.0.0';
 
 our $TAU = 6.28318530718; # 2 x pi
+our $port = '/dev/ttyS1';
 our $sp;
 
 getopts('d:h');
@@ -40,6 +41,8 @@ my $EN71_1371_GIF = './2117.gif';
 my $EN71_2117_GIF = './2117.gif';
 my $EN71_5815_GIF = './5815.gif';
 my $EN71_11469_GIF = './11469.gif';
+#TODO: save sample map in __DATA__ and set $mapX to it
+my ($map1, $map2, $map3) = undef;
 
 
 my  $HELP = <<"EOH";
@@ -194,16 +197,31 @@ sub setup {
 #                                                 -Create => 0,
 #                                                 -FPat => '*.gif')
 #                                    ->Show();
-    $$setup_canvas->Label(-text => 'Settings Directory')->grid
-      ($$setup_canvas->Entry(-textvariable => \$CONFIG_DIR,
+    $$setup_canvas->Label(-text => 'Map 1')->grid
+      ($$setup_canvas->Entry(-textvariable => \$map1,
                              -width => 40),
-       $$setup_canvas->Button(-text => 'Directory...',
-                              -command => [ \&choose_conf_dir ]));
+       $$setup_canvas->Button(-text => 'File...',
+                              -command => [ \&choose_file, \$map1 ]));
+    $$setup_canvas->Label(-text => 'Map 2')->grid
+      ($$setup_canvas->Entry(-textvariable => \$map2,
+                             -width => 40),
+       $$setup_canvas->Button(-text => 'File...',
+                              -command => [ \&choose_file, \$map2 ]));
+    $$setup_canvas->Label(-text => 'Map 3')->grid
+      ($$setup_canvas->Entry(-textvariable => \$map3,
+                             -width => 40),
+       $$setup_canvas->Button(-text => 'File...',
+                              -command => [ \&choose_file, \$map3 ]));
+    $$setup_canvas->Label(-text => 'Serial Port')->grid
+      ($$setup_canvas->Entry(-textvariable => \$port,
+                             -width => 40),
+       $$setup_canvas->Button(-text => 'Device...',
+                              -command => [ \&choose_file, \$port ]));
     $$setup_canvas->Button
       (
        -text => 'Close',
        -command => sub { $$setup_canvas->withdraw},
-      )->grid();
+      )->grid(-row => 4, -column => 1);
   }
   else {
     $$setup_canvas->deiconify();
@@ -244,7 +262,6 @@ sub set_speed {
 
 
 ########################## main #########################
-my $port = '/dev/ttyS1';
 $sp = new Device::SerialPort($port) || die "Can't open $port: $^E\n";
 
 $sp->databits(8);
