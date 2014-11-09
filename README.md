@@ -13,6 +13,7 @@ perl-tk
 libdevice-serialport-perl
 libtk-filedialog-perl
 libfile-homedir-perl
+libfile-slurp-perl
 
 Allow your user ID to access the serial port
 sudo usermod -a -G dialout $USER
