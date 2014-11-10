@@ -9,6 +9,7 @@
 # -bind alt-1 through alt-9 to speed selection
 # -bind alt-x to exit
 # -use entry fields to change heading and speed. bind cr to execute new entry
+# make it work with jpg files (get Tk::JPEG to work or use Imager from cpan)
 
 use strict;
 use feature qw(unicode_strings say);
@@ -64,9 +65,10 @@ command line options:
 
   -h Print help message
 
-Generate maps to show in the main window my going to:
-http://http://www2.wm7d.net/az_proj/az_html/azproj.shtml
-Save them to disk and set the location of them in the setup menu.
+Generate maps to show in the main window by using Great Circle Maps by SM3GSJ
+http://www.qsl.net/sm3gsj/
+Set the size of map option to 500 pixels.
+Save files to disk and set the location of them in the setup menu.
 
 Set the serial port (e.g. /dev/ttyUSB0 or /dev/ttyS1) in the setup menu.
 
