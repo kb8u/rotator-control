@@ -10,6 +10,7 @@ at this time.
 
 Required Ubuntu packages beyond stock distribution
 perl-tk
+libgtk2-imageview-perl
 libdevice-serialport-perl
 libtk-filedialog-perl
 libfile-homedir-perl
