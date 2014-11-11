@@ -9,7 +9,6 @@
 # -bind alt-1 through alt-9 to speed selection
 # -bind alt-x to exit
 # -use entry fields to change heading and speed. bind cr to execute new entry
-# make it work with jpg files (get Tk::JPEG to work or use Imager from cpan)
 
 use strict;
 use feature qw(unicode_strings say);
@@ -17,6 +16,7 @@ use Try::Tiny;
 use English;
 use File::Slurp;
 use Tk;
+use Tk::JPEG;
 use Tk::FileDialog;
 use Device::SerialPort qw( :STAT 0.07 );
 use File::HomeDir;
@@ -49,10 +49,8 @@ our $CONFIG_DIR = $opt_d ? $opt_d : File::HomeDir->my_data().'/rotator-control';
  $pix_label3, $file3,
  $port) = read_file("$CONFIG_DIR/config",err_mode => 'quiet');
 # default values if file can't be read
-unless (defined $file1) {
-  $pix_label1 = $pix_label2 = $pix_label3 = 'Default';
-}
-$port = $port ? $port : '/dev/ttyS1';
+$port = $port // '/dev/ttyS1';
+$pix_label1 = $pix_label1 // 'Default';
 
 # compass rose outer radius in pixels
 my $RADIUS = 231;
@@ -257,7 +255,7 @@ sub exit_gracefully {
 sub create_pix {
   my ($canvas, $file, $pix_ref, $default_image_ref) = @_;
 
-  if ($file && $file =~ /\.gif$/ && -r $file && -s $file > 1000) {
+  if ($file && $file =~ /\.(gif|jpg)$/ && -r $file && -s $file > 1000) {
     $$pix_ref = $canvas->Photo(-file => $file);
   }
   else {
@@ -359,12 +357,12 @@ $file_menu->pack(-side =>'left');
 my @map;
 $map[0]=['command' => $pix_label1,
          -command => [\&set_map, $canvas, $pix1, \$pix_id]];
-if ($pix_label2 ne 'Default') {
+if ($pix_label2) {
 $map[1]=['command' => $pix_label2,
          -command => [\&set_map, $canvas, $pix2, \$pix_id]];
 }
-if ($pix_label3 ne 'Default') {
-  $map[2]=['command' => $pix_label1,
+if ($pix_label3) {
+  $map[2]=['command' => $pix_label3,
            -command => [\&set_map, $canvas, $pix3, \$pix_id]];
 }
 my $map_menu = $top_menu_frame->Menubutton
