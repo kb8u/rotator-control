@@ -9,6 +9,7 @@
 # -bind alt-1 through alt-9 to speed selection
 # -bind alt-x to exit
 # -use entry fields to change heading and speed. bind cr to execute new entry
+#TODO: error check if Photo() fails, use default image instead and popup dialog
 
 use strict;
 use feature qw(unicode_strings say);
@@ -17,6 +18,7 @@ use English;
 use File::Slurp;
 use Tk;
 use Tk::JPEG;
+use Tk::Dialog;
 use Tk::FileDialog;
 use Device::SerialPort qw( :STAT 0.07 );
 use File::HomeDir;
@@ -445,6 +447,14 @@ my $stop_Button = $info_frame->Button
   );
 $stop_Button->pack(-side => 'left');
 $dir_descr_text = $info_frame->Label(-text=>'Movement')->pack(-side =>'left');
+
+unless ($sp) {
+  $mw->Dialog(-title => 'Problem with serial port',
+              -bitmap => 'warning',
+              -text => "Could not open serial port $port.  Choose a different serial port in the Setup menu and/or make sure you run `sudo usermod -a -G dialout \$USER` from the command line",
+              -default_button => 'Close',
+              -buttons => ['Close'])->Show();
+}
 
 my $beam_pointer;
 $mw->repeat(100,[\&repeat_handler,$canvas,\$beam_pointer,\$text_direction,\$text_speed]);
