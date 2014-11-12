@@ -24,25 +24,25 @@ use Getopt::Std;
 $Getopt::Std::STANDARD_HELP_VERSION = 1; # so --help goes to stdout
 our $VERSION = '1.0.0';
 
-our $TAU = 6.28318530718; # 2 x pi
+my $TAU = 6.28318530718; # 2 x pi
 my $default_image;
 while(<DATA>) {
   chomp;
   $default_image .= pack('H*', $_);
 }
 
-our $port;
+my $port;
 # files, labels and tk photo objects for background image
-our ($pix_label1,$pix_label2,$pix_label3);
-our ($file1,$file2,$file3);
-our ($pix1,$pix2,$pix3);
-our $sp;
+my ($pix_label1,$pix_label2,$pix_label3);
+my ($file1,$file2,$file3);
+my ($pix1,$pix2,$pix3);
+my $sp;
 
 getopts('d:h');
 our ($opt_d,$opt_h);
 
 # directory for configuration file
-our $CONFIG_DIR = $opt_d ? $opt_d : File::HomeDir->my_data().'/rotator-control';
+my $CONFIG_DIR = $opt_d ? $opt_d : File::HomeDir->my_data().'/rotator-control';
 
 ($pix_label1, $file1,
  $pix_label2, $file2,
@@ -94,6 +94,7 @@ if ($opt_h) {
 sub query_rotor {
   my ($command, $result_ref, $size) = @_;
 
+  return 0 unless $sp;
   $sp->write($command);
 
   my ($count_in, $string_in) = $sp->read($size);
@@ -111,7 +112,7 @@ sub repeat_handler {
 
   my $result;
   my ($x,$y,$radians);
-  query_rotor("\r",\$result,19);
+  return unless query_rotor("\r",\$result,19);
 
   my ($a,undef,$limit_flag,$heading,undef,$speed,undef,$movement) = 
     unpack "A A2 A2 A5 A3 A A A2",$result;
@@ -171,7 +172,7 @@ sub aim_it {
                color => 'red' };
   heading_line($args);
   $deg = int $deg;
-  $sp->write("$deg\r");
+  $sp->write("$deg\r") if $sp;
 }
 
 
@@ -284,6 +285,7 @@ sub set_map {
 # changes the rotor speed.
 sub set_speed {
   my ($speed) = @_;
+  return unless $sp;
   $sp->write("s$speed\r");  # rotor has bug where occassionally the command is
   $sp->write("s$speed\r");  # ignored.  workaround is to send the command
   $sp->write("s$speed\r");  # three times...
@@ -291,19 +293,20 @@ sub set_speed {
 
 
 ########################## main #########################
-$sp = new Device::SerialPort($port)
-    || die "Can't open serial port $port: $^E\n"
-           . "Did you run `sudo usermod -a -G dialout \$USER` ?\n";
+$sp = new Device::SerialPort($port);
+$sp || warn "Can't open serial port $port: $^E\n"
+            . "Did you run `sudo usermod -a -G dialout \$USER` ?\n";
+if ($sp) {
+  $sp->databits(8);
+  $sp->baudrate(9600);
+  $sp->parity("none");
+  $sp->stopbits(1);
+  $sp->handshake("none");
 
-$sp->databits(8);
-$sp->baudrate(9600);
-$sp->parity("none");
-$sp->stopbits(1);
-$sp->handshake("none");
+  $sp->write_settings || die "Couldn't configure serial port $port\n";
 
-$sp->write_settings || die "Couldn't configure serial port $port\n";
-
-$sp->read_const_time(50);
+  $sp->read_const_time(50);
+}
 
 my $mw = new MainWindow;
 $mw->title("M\N{SUPERSCRIPT TWO} Rotor control");
@@ -438,7 +441,7 @@ my $speed_descr_text = $info_frame->Label(-text=>'Speed')->pack(-side =>'left');
 my $stop_Button = $info_frame->Button
   (
    -text => 'STOP',
-   -command => [ sub { $sp->write("s\r") } ],
+   -command => [ sub { $sp->write("s\r") if $sp } ],
   );
 $stop_Button->pack(-side => 'left');
 $dir_descr_text = $info_frame->Label(-text=>'Movement')->pack(-side =>'left');
