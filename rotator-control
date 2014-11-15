@@ -26,6 +26,7 @@ use Getopt::Std;
 $Getopt::Std::STANDARD_HELP_VERSION = 1; # so --help goes to stdout
 our $VERSION = '1.0.0';
 
+my $GLOB = '*.[jg][pi][gf]'; # file glob pattern matches *.gif or *.jpg
 my $TAU = 6.28318530718; # 2 x pi
 my $default_image;
 while(<DATA>) {
@@ -33,12 +34,12 @@ while(<DATA>) {
   $default_image .= pack('H*', $_);
 }
 
+my $sp;
 my $port;
 # files, labels and tk photo objects for background image
 my ($pix_label1,$pix_label2,$pix_label3);
 my ($file1,$file2,$file3);
 my ($pix1,$pix2,$pix3);
-my $sp;
 
 getopts('d:h');
 our ($opt_d,$opt_h);
@@ -216,31 +217,36 @@ sub setup {
        -title => 'rotator-control setup',
        -takefocus => 1,
       );
-    $$setup_canvas->Label(-text => 'Map 1')->grid
+    $$setup_canvas->Label(-text => 'Label')->grid
+      ($$setup_canvas->Label(-text => 'File path'));
+    $$setup_canvas->Entry(-textvariable => \$pix_label1)->grid
       ($$setup_canvas->Entry(-textvariable => \$file1,
                              -width => 40),
        $$setup_canvas->Button(-text => 'File...',
-                              -command => [ \&choose_file, \$file1, '*.gif' ]));
-    $$setup_canvas->Label(-text => 'Map 2')->grid
+                              -command => [ \&choose_file, \$file1, $GLOB ]));
+
+    $$setup_canvas->Entry(-textvariable => \$pix_label2)->grid
       ($$setup_canvas->Entry(-textvariable => \$file2,
                              -width => 40),
        $$setup_canvas->Button(-text => 'File...',
-                              -command => [ \&choose_file, \$file2, '*.gif' ]));
-    $$setup_canvas->Label(-text => 'Map 3')->grid
+                              -command => [ \&choose_file, \$file2, $GLOB ]));
+
+    $$setup_canvas->Entry(-textvariable => \$pix_label3)->grid
       ($$setup_canvas->Entry(-textvariable => \$file3,
                              -width => 40),
        $$setup_canvas->Button(-text => 'File...',
-                              -command => [ \&choose_file, \$file3, '*.gif' ]));
+                              -command => [ \&choose_file, \$file3, $GLOB ]));
+
     $$setup_canvas->Label(-text => 'Serial Port')->grid
       ($$setup_canvas->Entry(-textvariable => \$port,
                              -width => 40),
        $$setup_canvas->Button(-text => 'Device...',
-                              -command => [ \&choose_file, \$port, 'tty*' ]));
+                              -command => [ \&choose_file,\$port,'/dev/tty*']));
     $$setup_canvas->Button
       (
        -text => 'Close',
        -command => sub { $$setup_canvas->withdraw},
-      )->grid(-row => 4, -column => 1);
+      )->grid(-row => 5, -column => 1);
   }
   else {
     $$setup_canvas->deiconify();
@@ -294,26 +300,36 @@ sub set_speed {
 }
 
 
-########################## main #########################
-$sp = new Device::SerialPort($port);
-$sp || warn "Can't open serial port $port: $^E\n"
-            . "Did you run `sudo usermod -a -G dialout \$USER` ?\n";
-if ($sp) {
-  $sp->databits(8);
-  $sp->baudrate(9600);
-  $sp->parity("none");
-  $sp->stopbits(1);
-  $sp->handshake("none");
+# configure serial port
+sub set_serial_port {
+  my ($sp_ref) = @_;
+ 
+  # close any old serial port first
+  eval { $$sp_ref->close();
+         undef $$sp_ref;
+  };
+  $$sp_ref = new Device::SerialPort($port);
+  $$sp_ref || warn "Can't open serial port $port: $^E\n"
+              . "Did you run `sudo usermod -a -G dialout \$USER` ?\n";
+  if ($$sp_ref) {
+    $$sp_ref->databits(8);
+    $$sp_ref->baudrate(9600);
+    $$sp_ref->parity("none");
+    $$sp_ref->stopbits(1);
+    $$sp_ref->handshake("none");
 
-  $sp->write_settings || die "Couldn't configure serial port $port\n";
+    $$sp_ref->write_settings || die "Couldn't configure serial port $port\n";
 
-  $sp->read_const_time(50);
+    $$sp_ref->read_const_time(50);
+  }
 }
 
+
+########################## main #########################
 my $mw = new MainWindow;
 $mw->title("M\N{SUPERSCRIPT TWO} Rotor control");
 
-my $canvas = $mw->Canvas( -height =>520, -width => 504);
+my $canvas = $mw->Canvas( -height =>504, -width => 504);
 $canvas->pack(-side => 'bottom', -anchor => 'center', -expand => 1,
               -fill => 'both');
 
@@ -448,6 +464,7 @@ my $stop_Button = $info_frame->Button
 $stop_Button->pack(-side => 'left');
 $dir_descr_text = $info_frame->Label(-text=>'Movement')->pack(-side =>'left');
 
+set_serial_port(\$sp);
 unless ($sp) {
   $mw->Dialog(-title => 'Problem with serial port',
               -bitmap => 'warning',
@@ -460,6 +477,7 @@ my $beam_pointer;
 $mw->repeat(100,[\&repeat_handler,$canvas,\$beam_pointer,\$text_direction,\$text_speed]);
 
 MainLoop;
+# End of main
 
 
 # default image
