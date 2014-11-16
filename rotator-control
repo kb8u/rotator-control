@@ -207,17 +207,17 @@ sub prelim_aim {
 }
 
 
-sub choose_file {
-  my ($file_ref,$pattern) = @_;
-#  my $file_dialog = $$setup_canvas->FileDialog(-Title => 'Select Map',
-#                                               -Create => 0,
-#                                               -FPat => $pattern)
-#                                   ->Show();
-}
-
-
 sub setup {
   my ($mw,$setup_canvas) = @_;
+
+  my $cfsub = 
+    sub {
+      my ($file_ref, $pattern) = @_;
+      my $new_file = $$setup_canvas->FileDialog(-Title => 'Select Map',
+                                                -Create => 0,
+                                                -FPat => $pattern)->Show();
+      $$file_ref = $new_file // $$file_ref;
+    };
 
   if (! Exists($$setup_canvas)) {
     $$setup_canvas = $$mw->Toplevel
@@ -231,25 +231,25 @@ sub setup {
       ($$setup_canvas->Entry(-textvariable => \$file1,
                              -width => 40),
        $$setup_canvas->Button(-text => 'File...',
-                              -command => [ \&choose_file, \$file1, $GLOB ]));
+                              -command => [ $cfsub, \$file1, $GLOB ]));
 
     $$setup_canvas->Entry(-textvariable => \$pix_label2)->grid
       ($$setup_canvas->Entry(-textvariable => \$file2,
                              -width => 40),
        $$setup_canvas->Button(-text => 'File...',
-                              -command => [ \&choose_file, \$file2, $GLOB ]));
+                              -command => [ $cfsub, \$file2, $GLOB ]));
 
     $$setup_canvas->Entry(-textvariable => \$pix_label3)->grid
       ($$setup_canvas->Entry(-textvariable => \$file3,
                              -width => 40),
        $$setup_canvas->Button(-text => 'File...',
-                              -command => [ \&choose_file, \$file3, $GLOB ]));
+                              -command => [ $cfsub, \$file3, $GLOB ]));
 
     $$setup_canvas->Label(-text => 'Serial Port')->grid
       ($$setup_canvas->Entry(-textvariable => \$port,
                              -width => 40),
        $$setup_canvas->Button(-text => 'Device...',
-                              -command => [ \&choose_file,\$port,'/dev/tty*']));
+                              -command => [ $cfsub, \$port, '/dev/tty*']));
     $$setup_canvas->Button
       (
        -text => 'Close',
