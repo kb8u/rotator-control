@@ -36,7 +36,9 @@ while(<DATA>) {
 
 my $sp;
 my $port;
+my @map;
 # files, labels and tk photo objects for background image
+my $current_pix;
 my ($pix_label1,$pix_label2,$pix_label3);
 my ($file1,$file2,$file3);
 my ($pix1,$pix2,$pix3);
@@ -47,6 +49,13 @@ our ($opt_d,$opt_h);
 # directory for configuration file
 my $CONFIG_DIR = $opt_d ? $opt_d : File::HomeDir->my_data().'/rotator-control';
 
+my $mw = new MainWindow;
+$mw->title("M\N{SUPERSCRIPT TWO} Rotor control");
+
+my $canvas = $mw->Canvas( -height =>504, -width => 504);
+$canvas->pack(-side => 'bottom', -anchor => 'center', -expand => 1,
+              -fill => 'both');
+my $map_menu;
 ($pix_label1, $file1,
  $pix_label2, $file2,
  $pix_label3, $file3,
@@ -143,7 +152,6 @@ sub repeat_handler {
 sub heading_line {
   my ($args) = @_;
   my $line_ref = $args->{line_ref};
-  my $canvas = $args->{canvas};
   my $cx = $args->{cx};
   my $cy = $args->{cy};
   my $color = $args->{color};
@@ -217,8 +225,8 @@ sub setup {
        -title => 'rotator-control setup',
        -takefocus => 1,
       );
-    $$setup_canvas->Label(-text => 'Label')->grid
-      ($$setup_canvas->Label(-text => 'File path'));
+    $$setup_canvas->Label(-text => 'Map label')->grid
+      ($$setup_canvas->Label(-text => 'Map file path'));
     $$setup_canvas->Entry(-textvariable => \$pix_label1)->grid
       ($$setup_canvas->Entry(-textvariable => \$file1,
                              -width => 40),
@@ -245,7 +253,10 @@ sub setup {
     $$setup_canvas->Button
       (
        -text => 'Close',
-       -command => sub { $$setup_canvas->withdraw},
+       -command => sub { $$setup_canvas->withdraw;
+                         set_serial_port(\$sp);
+                         set_map_menu();
+                       },
       )->grid(-row => 5, -column => 1);
   }
   else {
@@ -262,7 +273,7 @@ sub exit_gracefully {
 
 
 sub create_pix {
-  my ($canvas, $file, $pix_ref, $default_image_ref) = @_;
+  my ($file, $pix_ref, $default_image_ref) = @_;
 
   if ($file && $file =~ /\.(gif|jpg)$/ && -r $file && -s $file > 1000) {
     $$pix_ref = $canvas->Photo(-file => $file);
@@ -273,16 +284,41 @@ sub create_pix {
 }
 
 
+# set the map options when first run or after setup change
+sub set_map_menu {
+  # clear old menu items
+  $map_menu->menu->delete(0, 'end');
+
+  create_pix($file1, \$pix1, \$default_image);
+  create_pix($file2, \$pix2, \$default_image);
+  create_pix($file3, \$pix3, \$default_image);
+
+  $map[0]=['command', -label => ($pix_label1 // 'Map 1'),
+           -command => [\&set_map, $pix1, \$current_pix]];
+  if ($pix_label2) {
+    $map[1]=['command', -label => $pix_label2,
+             -command => [\&set_map, $pix2, \$current_pix]];
+  }
+  if ($pix_label3) {
+      $map[2]=['command', -label => $pix_label3,
+               -command => [\&set_map, $pix3, \$current_pix]];
+  }
+  foreach my $item (@map) {
+    $map_menu->menu->add(@{$item});
+  }
+}
+
+
 # change the map
 sub set_map {
-  my ($canvas,$pix,$pix_id_ref) = @_;
+  my ($new_pix, $current_pix) = @_;
 
   # get rid of the old picture first
-  $canvas->delete($$pix_id_ref);
-  $$pix_id_ref = $canvas->createImage(0, 0,
-                                      -image => $pix,
-                                      -anchor => 'center');
-  $canvas->lower($$pix_id_ref,'all');
+  $canvas->delete($$current_pix);
+  $$current_pix = $canvas->createImage(0, 0,
+                                       -image => $new_pix,
+                                       -anchor => 'center');
+  $canvas->lower($$current_pix,'all');
   $canvas->configure(-scrollregion => [$canvas->bbox("all") ]);
   # initialize the view to more-or-less the middle of the drawing
   $canvas->xview('moveto',0.11);
@@ -326,21 +362,13 @@ sub set_serial_port {
 
 
 ########################## main #########################
-my $mw = new MainWindow;
-$mw->title("M\N{SUPERSCRIPT TWO} Rotor control");
-
-my $canvas = $mw->Canvas( -height =>504, -width => 504);
-$canvas->pack(-side => 'bottom', -anchor => 'center', -expand => 1,
-              -fill => 'both');
-
 # Create Photo objects
-create_pix($canvas, $file1, \$pix1, \$default_image);
-create_pix($canvas, $file2, \$pix2, \$default_image);
-create_pix($canvas, $file3, \$pix3, \$default_image);
+create_pix($file1, \$pix1, \$default_image);
+create_pix($file2, \$pix2, \$default_image);
+create_pix($file3, \$pix3, \$default_image);
 
-my $pix_id;
 # draw a map to start with
-set_map($canvas,$pix1,\$pix_id);
+set_map($pix1,\$current_pix);
 
 # set the scroll region to the proper size
 $canvas->configure(-scrollregion => [$canvas->bbox("all") ]);
@@ -375,24 +403,14 @@ my $file_menu = $top_menu_frame->Menubutton
    -menuitems => [[ 'command' => "Exit", -command => \&exit_gracefully],]
   );
 $file_menu->pack(-side =>'left');
-my @map;
-$map[0]=['command' => $pix_label1,
-         -command => [\&set_map, $canvas, $pix1, \$pix_id]];
-if ($pix_label2) {
-$map[1]=['command' => $pix_label2,
-         -command => [\&set_map, $canvas, $pix2, \$pix_id]];
-}
-if ($pix_label3) {
-  $map[2]=['command' => $pix_label3,
-           -command => [\&set_map, $canvas, $pix3, \$pix_id]];
-}
-my $map_menu = $top_menu_frame->Menubutton
+$map_menu = $top_menu_frame->Menubutton
   (
    -text => 'Map',
    -tearoff => 0,
    -menuitems => \@map,
   );
 $map_menu->pack(-side =>'left');
+set_map_menu();
 
 my @speed;
 for(my $i=1; $i<10; $i++) {
