@@ -5,7 +5,6 @@
 
 # stuff to add or re-write:
 # -map and serial port configuration
-# -don't use eval in sub movepix
 # -bind alt-1 through alt-9 to speed selection
 # -bind alt-x to exit
 # -use entry fields to change heading and speed. bind cr to execute new entry
@@ -13,13 +12,14 @@
 
 use strict;
 use feature qw(unicode_strings say);
-use Try::Tiny;
 use English;
+use Pod::Usage;
 use File::Slurp;
 use Tk;
 use Tk::JPEG;
 use Tk::Dialog;
 use Tk::FileDialog;
+use Tk::Pod;
 use Device::SerialPort qw( :STAT 0.07 );
 use File::HomeDir;
 use Getopt::Std;
@@ -70,7 +70,7 @@ unless (defined $pix_label1) {
 # compass rose outer radius in pixels
 my $RADIUS = 231;
 
-my  $HELP = <<"EOH";
+my $HELP = <<"EOH";
 command line options:
   -d directory to hold configuration data.  Defaults to
      $CONFIG_DIR
@@ -79,9 +79,9 @@ command line options:
   -h Print help message
 
 Generate maps to show in the main window by using Great Circle Maps by SM3GSJ
-http://www.qsl.net/sm3gsj/
+L<http://www.qsl.net/sm3gsj/>
 Download additional border .pnt files from:
-http://www.spatial.ucsb.edu/map-projections/anderson/SSMap_Data.zip
+L<http://www.spatial.ucsb.edu/map-projections/anderson/SSMap_Data.zip>
 Set the size of map option to 500 pixels.
 Save files to disk and set the location of them in the setup menu.
 
@@ -95,13 +95,12 @@ EOH
 
 # can't use variables like $HELP in getopt's HELP_MESSAGE.  Why??
 sub HELP_MESSAGE {
-  say 'Use -h for help';
-  exit;
+  pod2usage(-verbose => 2);
 }
 
 
 if ($opt_h) {
-  say $HELP;
+  pod2usage(-verbose => 2);
   exit;
 }
 
@@ -418,7 +417,6 @@ my $top_menu_frame = $mw->Frame
 
    -borderwidth => 2,
    -height => 18,
-#   -width => 500,
   );
 $top_menu_frame->pack(-side=>'top', -fill => 'x');
 $top_menu_frame->packPropagate(0);
@@ -459,6 +457,14 @@ my $setup_button = $top_menu_frame->Button
    -command => [\&setup,\$mw,\$setup_canvas]
   );
 $setup_button->pack(-side => 'left');
+my $help_button = $top_menu_frame->Button
+  (
+   -text => 'Help',
+   -relief => 'flat',
+   -command => sub { $mw->Pod( -file => __FILE__ ) }
+  );
+$help_button->pack(-side => 'left');
+
 # a frame for the current beam heading, moving indicator and stop button
 my $info_frame = $mw->Frame
   (
@@ -523,6 +529,44 @@ $mw->repeat(100,[\&repeat_handler,$canvas,\$beam_pointer,\$text_direction,\$text
 
 MainLoop;
 # End of main
+
+=head1 rotator-control help
+
+=head2 usage
+
+You may need to set the serial port in the Setup menu first (see below).  If
+everything is working you should see text in the Heading and Speed text boxes
+and a green line on the map will show where the rotator is pointing.
+
+Double click anywhere on the map to move the rotator to the desired direction.
+A red line will appear showing where the rotator is moving to.  The rotator may
+over or undershoot a little, this is normal.
+
+=head2 command line options
+
+-d directory to hold configuration data.  If none is specified, a default
+will be created.
+
+-h Print help message
+
+=head2 maps
+
+Generate maps to show in the main window by using Great Circle Maps by SM3GSJ
+http://www.qsl.net/sm3gsj/
+Download additional border .pnt files from:
+http://www.spatial.ucsb.edu/map-projections/anderson/SSMap_Data.zip
+Set the size of map option to 500 pixels
+Save files to disk and set the location of them in the setup menu.
+Select from up to three maps from the Map menu.
+
+=head2 serial port
+
+Set the serial port (e.g. /dev/ttyUSB0 or /dev/ttyS1) in the setup menu.
+
+On linux, you will need to permit users to access the serial port by running
+the following command from a terminal:
+sudo usermod -a -G dialout \$USER
+=cut
 
 
 # default image
