@@ -212,6 +212,31 @@ sub prelim_aim {
 }
 
 
+sub save_and_hide {
+  my ($setup_canvas) = @_;
+  set_serial_port(\$sp);
+  set_map_menu();
+  my @file_contents = (
+       ($pix_label1 // ''),($file1 // ''),
+       ($pix_label2 // ''),($file2 // ''),
+       ($pix_label3 // ''),($file3 // ''),
+       $port);
+  @file_contents = map { $_ = "$_\n" } @file_contents;
+
+  mkdir $CONFIG_DIR unless -d $CONFIG_DIR;
+  unless (write_file("$CONFIG_DIR/config",
+                     {err_mode => 'quiet'},
+                     @file_contents)) {
+  $mw->Dialog(-title => "Can't save configuration",
+              -bitmap => 'warning',
+              -text => "Could not save configuration to $CONFIG_DIR/config",
+              -default_button => 'Close',
+              -buttons => ['Close'])->Show();
+  }
+  $$setup_canvas->withdraw;
+}
+
+
 sub setup {
   my ($mw,$setup_canvas) = @_;
 
@@ -258,23 +283,7 @@ sub setup {
     $$setup_canvas->Button
       (
        -text => 'Close',
-       -command => sub { set_serial_port(\$sp);
-                         set_map_menu();
-                         my @file_contents = (
-                           ($pix_label1 // ''),($file1 // ''),
-                           ($pix_label2 // ''),($file2 // ''),
-                           ($pix_label3 // ''),($file3 // ''),
-                           $port);
-                         @file_contents = map { $_ = "$_\n" } @file_contents;
-
-                         mkdir $CONFIG_DIR unless -d $CONFIG_DIR;
-                         unless (write_file("$CONFIG_DIR/config",
-                                            {err_mode => 'quiet'},
-                                            @file_contents)) {
-                           print "nope on $CONFIG_DIR/config\n";
-                         };
-                         $$setup_canvas->withdraw;
-                       }
+       -command => [ \&save_and_hide, $setup_canvas ],
       )->grid(-row => 5, -column => 1);
   }
   else {
