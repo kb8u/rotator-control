@@ -279,12 +279,10 @@ sub setup {
 
     $$setup_canvas->Label(-text => 'Serial Port')->grid
       ($$setup_canvas->Entry(-textvariable => \$port,
-                             -width => 40),
-       $$setup_canvas->Button(-text => 'Device...',
-                              -command => [ $cfsub, \$port, '/dev/tty*']));
+                             -width => 40));
     $$setup_canvas->Label(-text => 'Grid Square')->grid
       ($$setup_canvas->Entry(-textvariable => \$grid_square,
-                             -width => 6));
+                             -width => 40));
     $$setup_canvas->Button
       (
        -text => 'Close',
