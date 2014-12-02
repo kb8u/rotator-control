@@ -4,7 +4,6 @@
 # See the LICENSE files for terms of use.
 
 # stuff to add or re-write:
-# -map and serial port configuration
 # -bind alt-1 through alt-9 to speed selection
 # -bind alt-x to exit
 # -use entry fields to change heading and speed. bind cr to execute new entry
@@ -13,15 +12,15 @@
 use strict;
 use feature qw(unicode_strings say);
 use English;
-use Pod::Usage;
 use File::Slurp;
 use Tk;
 use Tk::JPEG;
 use Tk::Dialog;
 use Tk::FileDialog;
-use Tk::Pod;
+use Tk::Help;
 use Device::SerialPort qw( :STAT 0.07 );
 use File::HomeDir;
+use Ham::Resources::Utils;
 use Getopt::Std;
 $Getopt::Std::STANDARD_HELP_VERSION = 1; # so --help goes to stdout
 our $VERSION = '1.0.0';
@@ -37,6 +36,7 @@ while(<DATA>) {
 
 my $sp;
 my $port;
+my $grid_square;
 my @map;
 # files, labels and tk photo objects for background image
 my $current_pix;
@@ -50,17 +50,12 @@ our ($opt_d,$opt_h);
 # directory for configuration file
 my $CONFIG_DIR = $opt_d ? $opt_d : File::HomeDir->my_data().'/rotator-control';
 
-my $mw = new MainWindow;
-$mw->title("M\N{SUPERSCRIPT TWO} Rotor control");
-
-my $canvas = $mw->Canvas( -height =>504, -width => 504);
-$canvas->pack(-side => 'bottom', -anchor => 'center', -expand => 1,
-              -fill => 'both');
 my $map_menu;
 ($pix_label1, $file1,
  $pix_label2, $file2,
  $pix_label3, $file3,
- $port) = read_file("$CONFIG_DIR/config",err_mode => 'quiet', chomp => 1);
+ $port,$grid_square) =
+   read_file("$CONFIG_DIR/config",err_mode => 'quiet', chomp => 1);
 # default values if file can't be read
 unless (defined $pix_label1) {
   $port = '/dev/ttyS1';
@@ -95,15 +90,22 @@ EOH
 
 # can't use variables like $HELP in getopt's HELP_MESSAGE.  Why??
 sub HELP_MESSAGE {
-  pod2usage(-verbose => 2);
+  print "use -h for help\n";
+  exit;
 }
 
 
 if ($opt_h) {
-  pod2usage(-verbose => 2);
+  print $HELP;
   exit;
 }
 
+my $mw = new MainWindow;
+$mw->title("M\N{SUPERSCRIPT TWO} Rotor control");
+
+my $canvas = $mw->Canvas( -height =>504, -width => 504);
+$canvas->pack(-side => 'bottom', -anchor => 'center', -expand => 1,
+              -fill => 'both');
 
 # send an opcode and get raw data back from rotor
 # returns 1 on success, 0 otherwise
@@ -219,7 +221,8 @@ sub save_and_hide {
        ($pix_label1 // ''),($file1 // ''),
        ($pix_label2 // ''),($file2 // ''),
        ($pix_label3 // ''),($file3 // ''),
-       $port);
+       $port,
+       ($grid_square // ''));
   @file_contents = map { $_ = "$_\n" } @file_contents;
 
   mkdir $CONFIG_DIR unless -d $CONFIG_DIR;
@@ -279,11 +282,14 @@ sub setup {
                              -width => 40),
        $$setup_canvas->Button(-text => 'Device...',
                               -command => [ $cfsub, \$port, '/dev/tty*']));
+    $$setup_canvas->Label(-text => 'Grid Square')->grid
+      ($$setup_canvas->Entry(-textvariable => \$grid_square,
+                             -width => 6));
     $$setup_canvas->Button
       (
        -text => 'Close',
        -command => [ \&save_and_hide, $setup_canvas ],
-      )->grid(-row => 5, -column => 1);
+      )->grid(-row => 6, -column => 1);
   }
   else {
     $$setup_canvas->deiconify();
@@ -294,6 +300,7 @@ sub setup {
 
 sub exit_gracefully {
   undef $sp;
+  $mw->destroy();
   exit;
 }
 
@@ -387,6 +394,45 @@ sub set_serial_port {
 }
 
 
+sub tkhelp {
+  my @helparray = ([{-title => 'rotator-control',
+                     -header => 'rotator-control help',
+                     -text => "Computer control a M\N{SUPERSCRIPT TWO} RC2800PX antenna rotor control"}],
+                   [{-title => 'Application basic usage',
+                     -header => "Application basic usage",
+                     -text => 
+'You may need to set the serial port in the Setup menu first (see next section).  If everything is working you should see numbers in the Heading and Speed text boxes and a green line on the map will show where the rotator is pointing.
+
+Double click anywhere on the map to move the rotator to the desired direction.  A red line will appear showing where the rotator is moving to.  The rotator may over or undershoot a little, this is normal.'
+                   }],
+                   [{-title => 'Serial port',
+                     -header => 'Serial port',
+                     -text => 
+'Set the serial port (e.g. /dev/ttyUSB0 or /dev/ttyS1) in the setup menu.
+
+On linux, you will need to permit users to access the serial port by running the following command from a terminal: sudo usermod -a -G dialout $USER'
+                   }],
+                   [{-title => 'Command line options',
+                     -header => 'Command line options',
+                     -text =>
+'-d directory to hold configuration data.  If none is specified, a default will be created.
+
+-h Print help message'
+                   }],
+                   [{-title => 'Maps',
+                     -header => 'Maps',
+                     -text =>
+'Generate maps to show in the main window by using Great Circle Maps by SM3GSJ http://www.qsl.net/sm3gsj/
+
+Download additional border .pnt files from http://www.spatial.ucsb.edu/map-projections/anderson/SSMap_Data.zip
+
+Set the size of map option to 500 pixels. Save files to disk and set the location of them in the setup menu.  Select from up to three maps from the Map menu.'
+                   }]);
+  $mw->Help(-title => 'rotator-control help',
+            -variable => \@helparray);
+}
+
+
 ########################## main #########################
 # Create Photo objects
 create_pix($file1, \$pix1, \$default_image);
@@ -461,7 +507,7 @@ my $help_button = $top_menu_frame->Button
   (
    -text => 'Help',
    -relief => 'flat',
-   -command => sub { $mw->Pod( -file => __FILE__ ) }
+   -command => sub { tkhelp() }
   );
 $help_button->pack(-side => 'left');
 
@@ -528,6 +574,7 @@ my $beam_pointer;
 $mw->repeat(100,[\&repeat_handler,$canvas,\$beam_pointer,\$text_direction,\$text_speed]);
 
 MainLoop;
+exit(0);
 # End of main
 
 =head1 rotator-control help
@@ -535,7 +582,7 @@ MainLoop;
 =head2 usage
 
 You may need to set the serial port in the Setup menu first (see below).  If
-everything is working you should see text in the Heading and Speed text boxes
+everything is working you should see numbers in the Heading and Speed text boxes
 and a green line on the map will show where the rotator is pointing.
 
 Double click anywhere on the map to move the rotator to the desired direction.
@@ -565,7 +612,7 @@ Set the serial port (e.g. /dev/ttyUSB0 or /dev/ttyS1) in the setup menu.
 
 On linux, you will need to permit users to access the serial port by running
 the following command from a terminal:
-sudo usermod -a -G dialout \$USER
+sudo usermod -a -G dialout $USER
 =cut
 
 
