@@ -6,11 +6,11 @@
 # stuff to add or re-write:
 # -bind alt-1 through alt-9 to speed selection
 # -bind alt-x to exit
-# -use entry fields to change heading and speed. bind cr to execute new entry
 #TODO: error check if Photo() fails, use default image instead and popup dialog
 
 use strict;
 use feature qw(unicode_strings say);
+use Data::Dumper;
 use English;
 use File::Slurp;
 use Tk;
@@ -20,10 +20,12 @@ use Tk::FileDialog;
 use Tk::Help;
 use Device::SerialPort qw( :STAT 0.07 );
 use File::HomeDir;
-use Ham::Resources::Utils;
 use Getopt::Std;
 $Getopt::Std::STANDARD_HELP_VERSION = 1; # so --help goes to stdout
 our $VERSION = '1.0.0';
+
+use lib '/home/kb8u/bin/rotator-control/lib';
+use Heading 'heading_to';
 
 
 my $GLOB = '*.[jg][pi][gf]'; # file glob pattern matches *.gif or *.jpg
@@ -36,7 +38,7 @@ while(<DATA>) {
 
 my $sp;
 my $port;
-my $grid_square;
+my $from_grid;
 my @map;
 # files, labels and tk photo objects for background image
 my $current_pix;
@@ -54,7 +56,7 @@ my $map_menu;
 ($pix_label1, $file1,
  $pix_label2, $file2,
  $pix_label3, $file3,
- $port,$grid_square) =
+ $port,$from_grid) =
    read_file("$CONFIG_DIR/config",err_mode => 'quiet', chomp => 1);
 # default values if file can't be read
 unless (defined $pix_label1) {
@@ -126,7 +128,8 @@ sub query_rotor {
 
 # update GUI
 sub repeat_handler {
-  my ($canv,$line_ref,$text_direction_ref,$text_speed_ref) = @_;
+  my ($canv,$line_ref,
+      $direction_entry_ref,$text_direction_ref,$text_speed_ref)= @_;
 
   my $result;
   my ($x,$y,$radians);
@@ -143,7 +146,11 @@ sub repeat_handler {
   unless ($heading =~ /\d{1,3}\.?\d?/) { return }
   unless ($speed =~ /^\d$/ && $speed > 0 && $speed < 10) { return }
   unless ($movement eq 'ST' || $movement eq 'MV') { return }
-  $$text_direction_ref = int($heading) . "\N{DEGREE SIGN}";
+  # don't overwrite with current heading if direction entry has focus
+  unless (defined $mw->focusCurrent 
+          && $mw->focusCurrent == $$direction_entry_ref) {
+    $$text_direction_ref = int($heading) . "\N{DEGREE SIGN}";
+  }
   $heading -= 90; # adjust from rotors to Tk's idea of what angle represents
   $radians = $TAU*($heading/360); # cos, sin needs radians, not degrees
   $x = int ($RADIUS * cos $radians);
@@ -167,6 +174,36 @@ sub heading_line {
   my $ry = $RADIUS * sin $angle;
   $canvas->delete($$line_ref);
   $$line_ref = $canvas->createLine(0,0,$rx,$ry,-fill => $color, -width => 3);
+}
+
+
+# move to a new heading based on text typed in 
+sub new_heading_from_text {
+  my ($widget, $line_ref, $text_ref) = @_;
+
+  my $to_grid;
+  my $call_prefix;
+  # grid square?
+  if (   $$text_ref =~ /^([A-Za-z][A-Za-z]\d\d[A-Za-z][A-Za-z])$/
+      || $$text_ref =~ /^([A-Za-z][A-Za-z]\d\d)$/) {
+    $to_grid = $1 }
+  else {
+    $call_prefix = $$text_ref;
+  }
+  my $deg = heading_to($from_grid,$to_grid,$call_prefix);
+  return if (! defined $deg);
+  # place a red line at the new heading
+  my $radians = $TAU*(($deg-90)/360); # cos, sin needs radians, not degrees
+  my $x = int ($RADIUS * cos $radians);
+  my $y = int ($RADIUS * sin $radians);
+  my $args = { line_ref => $line_ref,
+               canvas => $canvas,
+               cx => $x,
+               cy => $y,
+               color => 'red' };
+  heading_line($args);
+  $deg = int $deg;
+  $sp->write("$deg\r") if $sp;
 }
 
 
@@ -217,23 +254,36 @@ sub save_and_hide {
   my ($setup_canvas) = @_;
   set_serial_port(\$sp);
   set_map_menu();
+  if (defined $from_grid) {
+    $from_grid =~ s/\s+//g;
+    # convert 4 digit to 6 digit (assume near center of square)
+    if ($from_grid =~ /^[a-z][a-z][0-9][0-9]$/i) { $from_grid .= 'mm' }
+    if ($from_grid !~ /^[a-z][a-z][0-9][0-9][a-z][a-z]$/i) {
+      $from_grid = undef;
+      $mw->Dialog(-title => 'Invalid grid square',
+                  -bitmap => 'warning',
+                  -text => 'Grid square should be like FN20 or FN20xq',
+                  -default_button => 'Close',
+                  -buttons => ['Close'])->Show();
+    }
+  }
   my @file_contents = (
        ($pix_label1 // ''),($file1 // ''),
        ($pix_label2 // ''),($file2 // ''),
        ($pix_label3 // ''),($file3 // ''),
        $port,
-       ($grid_square // ''));
+       ($from_grid // ''));
   @file_contents = map { $_ = "$_\n" } @file_contents;
 
   mkdir $CONFIG_DIR unless -d $CONFIG_DIR;
   unless (write_file("$CONFIG_DIR/config",
                      {err_mode => 'quiet'},
                      @file_contents)) {
-  $mw->Dialog(-title => "Can't save configuration",
-              -bitmap => 'warning',
-              -text => "Could not save configuration to $CONFIG_DIR/config",
-              -default_button => 'Close',
-              -buttons => ['Close'])->Show();
+    $mw->Dialog(-title => "Can't save configuration",
+                -bitmap => 'warning',
+                -text => "Could not save configuration to $CONFIG_DIR/config",
+                -default_button => 'Close',
+                -buttons => ['Close'])->Show();
   }
   $$setup_canvas->withdraw;
 }
@@ -281,7 +331,7 @@ sub setup {
       ($$setup_canvas->Entry(-textvariable => \$port,
                              -width => 40));
     $$setup_canvas->Label(-text => 'Grid Square')->grid
-      ($$setup_canvas->Entry(-textvariable => \$grid_square,
+      ($$setup_canvas->Entry(-textvariable => \$from_grid,
                              -width => 40));
     $$setup_canvas->Button
       (
@@ -523,15 +573,16 @@ my $text_direction;
 my $direction_entry = $info_frame->Entry
   (
    -textvariable => \$text_direction,
-   -width => 4,
+   -width => 7,
    -font => "Arial 12 bold",
    -foreground => 'green',
    -background => 'black',
    -insertbackground => 'white',
-   -takefocus => 0,
   );
 # numeric indicator/input of beam heading
 $direction_entry->pack(-side =>'left');
+$direction_entry->bind("<Return>", [\&new_heading_from_text,
+                                    \$desired_dir, \$text_direction]);
 my $dir_descr_text = $info_frame->Label(-text=>'Heading')->pack(-side =>'left');
 
 # a text entry field for current speed
@@ -569,8 +620,10 @@ unless ($sp) {
 }
 
 my $beam_pointer;
-$mw->repeat(100,[\&repeat_handler,$canvas,\$beam_pointer,\$text_direction,\$text_speed]);
-
+$mw->repeat(100,[\&repeat_handler,$canvas,\$beam_pointer,
+                                  \$direction_entry,\$text_direction,
+                                  \$text_speed]);
+$mw->focusFollowsMouse();
 MainLoop;
 exit(0);
 # End of main
