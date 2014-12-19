@@ -15,7 +15,6 @@ use File::Slurp;
 use Tk;
 use Tk::JPEG;
 use Tk::Dialog;
-use Tk::FileDialog;
 use Tk::Help;
 use Device::SerialPort qw( :STAT 0.07 );
 use File::HomeDir;
@@ -294,9 +293,7 @@ sub setup {
   my $cfsub = 
     sub {
       my ($file_ref, $pattern) = @_;
-      my $new_file = $$setup_canvas->FileDialog(-Title => 'Select Map',
-                                                -Create => 0,
-                                                -FPat => $pattern)->Show();
+      my $new_file=$$mw->getOpenFile(-filetypes=>[['Images',['.gif','.jpg']]]);
       $$file_ref = $new_file // $$file_ref;
     };
 
