@@ -6,12 +6,12 @@
 # stuff to add or re-write:
 # -bind alt-1 through alt-9 to speed selection
 # -bind alt-x to exit
-#TODO: error check if Photo() fails, use default image instead and popup dialog
 
 use strict;
 use feature qw(unicode_strings say);
 use English;
 use File::Slurp;
+use Try::Tiny;
 use Tk;
 use Tk::JPEG;
 use Tk::Dialog;
@@ -293,7 +293,8 @@ sub setup {
   my $cfsub = 
     sub {
       my ($file_ref, $pattern) = @_;
-      my $new_file=$$mw->getOpenFile(-filetypes=>[['Images',['.gif','.jpg']]]);
+      my $new_file =
+        $$mw->getOpenFile(-filetypes=>[['Images',['.gif','.jpg']]]);
       $$file_ref = $new_file // $$file_ref;
     };
 
@@ -352,11 +353,16 @@ sub exit_gracefully {
 sub create_pix {
   my ($file, $pix_ref, $default_image_ref) = @_;
 
-  if ($file && $file =~ /\.(gif|jpg)$/ && -r $file && -s $file > 1000) {
+  try {
     $$pix_ref = $canvas->Photo(-file => $file);
   }
-  else {
+  catch {
     $$pix_ref = $canvas->Photo(-data => $$default_image_ref);
+    $mw->Dialog(-title => 'Invalid image file',
+                -bitmap => 'warning',
+                -text => "Can't process $file, using default instead",
+                -default_button => 'Close',
+                -buttons => ['Close'])->Show();
   }
 }
 
