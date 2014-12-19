@@ -3,7 +3,7 @@ use strict;
 use warnings;
 use Data::Dumper;
 use Ham::Locator;
-use Geo::Calc;
+use Ham::Resources::Utils;
 use Exporter 'import';
 
 our @ISA = qw(Exporter);
@@ -726,26 +726,23 @@ sub heading_to {
   my ($from_grid,$to_grid,$call_prefix) = @_;
 
   return undef if (! defined $from_grid);
-  my $loc_ins = new Ham::Locator;
-  $loc_ins->set_loc($from_grid);
-  my ($from_lat,$from_lon) = $loc_ins->loc2latlng();
 
-  my ($to_lat,$to_lon);
-  if (defined $to_grid) {
-    $loc_ins->set_loc($to_grid);
-    ($to_lat,$to_lon) = $loc_ins->loc2latlng;
-  }
   if (defined $call_prefix) {
     $call_prefix =~ s/\s+//g;
     $call_prefix = uc $call_prefix;
     return undef unless (exists $prefix{$call_prefix});
 
-    $to_lat = $prefix{$call_prefix}->{lat};
-    $to_lon = $prefix{$call_prefix}->{lon};
+    my $loc_ins = new Ham::Locator;
+    $loc_ins->set_precision(6);
+    $loc_ins->set_latlng($prefix{$call_prefix}->{lat},
+                         $prefix{$call_prefix}->{lon});
+    $to_grid = $loc_ins->latlng2loc();
   }
+  return undef if (! defined $to_grid);
 
-  my $gc = Geo::Calc->new(lat => $from_lat, lon => $from_lon);
-  return $gc->bearing_to({lat => $to_lat, lon => $to_lon });
+  my $hr_ins = Ham::Resources::Utils->new();
+  my %data = $hr_ins->data_by_locator('14-03-2012',$from_grid,$to_grid);
+  return $data{course_dec};
 }
 
 
