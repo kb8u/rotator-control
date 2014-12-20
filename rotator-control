@@ -309,20 +309,24 @@ sub setup {
     $$setup_canvas->Entry(-textvariable => \$pix_label1)->grid
       ($$setup_canvas->Entry(-textvariable => \$file1,
                              -width => 40),
-       $$setup_canvas->Button(-text => 'File...',
-                              -command => [ \&select_file, $setup_canvas, \$file1 ]));
+# cava packager binary can't display an icon used by getOpenFile
+);
+#       $$setup_canvas->Button(-text => 'File...',
+#                              -command => [ \&select_file, $setup_canvas, \$file1 ]));
 
     $$setup_canvas->Entry(-textvariable => \$pix_label2)->grid
       ($$setup_canvas->Entry(-textvariable => \$file2,
                              -width => 40),
-       $$setup_canvas->Button(-text => 'File...',
-                              -command => [ \&select_file, $setup_canvas, \$file2 ]));
+);
+#       $$setup_canvas->Button(-text => 'File...',
+#                              -command => [ \&select_file, $setup_canvas, \$file2 ]));
 
     $$setup_canvas->Entry(-textvariable => \$pix_label3)->grid
       ($$setup_canvas->Entry(-textvariable => \$file3,
                              -width => 40),
-       $$setup_canvas->Button(-text => 'File...',
-                              -command => [ \&select_file, $setup_canvas, \$file3 ]));
+);
+#       $$setup_canvas->Button(-text => 'File...',
+#                              -command => [ \&select_file, $setup_canvas, \$file3 ]));
 
     $$setup_canvas->Label(-text => 'Serial Port')->grid
       ($$setup_canvas->Entry(-textvariable => \$port,
