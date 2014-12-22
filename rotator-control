@@ -810,7 +810,7 @@ use Getopt::Std;
 $Getopt::Std::STANDARD_HELP_VERSION = 1; # so --help goes to stdout
 our $VERSION = '1.0.0';
 
-use lib '/home/rjd/rotator-control/lib';
+#use lib '/home/rjd/rotator-control/lib';
 use Heading 'heading_to';
 
 

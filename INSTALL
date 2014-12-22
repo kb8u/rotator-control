@@ -1,6 +1,6 @@
 To install on Ubuntu, do the following:
 
-sudo apt-get install perl-tk libgtk2-imageview-perl libdevice-serialport-perl libfile-homedir-perl libfile-slurp-perl
+sudo apt-get install libtry-tiny-perl perl-tk libgtk2-imageview-perl libdevice-serialport-perl libfile-homedir-perl libfile-slurp-perl
 sudo cpanp i Tk::Help Ham::Locator Ham::Resources::Utils
 
 If your system upgrades perl, you will need to run the cpanp line again.
