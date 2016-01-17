@@ -46,7 +46,6 @@ $fatpacked{"Heading.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'HEADING
   $prefix{'4O'}= { lat => 42, lon => 19 };
   $prefix{'YU3'}= { lat => 42, lon => 19 };
   $prefix{'YU6'}= { lat => 42, lon => 19 };
-  $prefix{'..'}= { lat => 42, lon => 19 };
   $prefix{'4S'}= { lat => 7, lon => 80 };
   $prefix{'4U'}= { lat => 46, lon => 6 };
   $prefix{'4U'}= { lat => 41, lon => -74 };
@@ -98,7 +97,11 @@ $fatpacked{"Heading.pm"} = '#line '.(1+__LINE__).' "'.__FILE__."\"\n".<<'HEADING
   $prefix{'AP'}= { lat => 34, lon => 73 };
   $prefix{'BS7'}= { lat => 15, lon => 118 };
   $prefix{'BV'}= { lat => 25, lon => 122 };
-  $prefix{'BM-BQ'}= { lat => 25, lon => 122 };
+  $prefix{'BM'}= { lat => 25, lon => 122 };
+  $prefix{'BN'}= { lat => 25, lon => 122 };
+  $prefix{'BO'}= { lat => 25, lon => 122 };
+  $prefix{'BP'}= { lat => 25, lon => 122 };
+  $prefix{'BQ'}= { lat => 25, lon => 122 };
   $prefix{'BU'}= { lat => 25, lon => 122 };
   $prefix{'BW'}= { lat => 25, lon => 122 };
   $prefix{'BX'}= { lat => 25, lon => 122 };
@@ -809,6 +812,7 @@ use File::HomeDir;
 use Getopt::Std;
 $Getopt::Std::STANDARD_HELP_VERSION = 1; # so --help goes to stdout
 our $VERSION = '1.0.0';
+our $offset;
 
 #use lib '/home/rjd/rotator-control/lib';
 use Heading 'heading_to';
@@ -841,12 +845,13 @@ my $map_menu;
 ($pix_label1, $file1,
  $pix_label2, $file2,
  $pix_label3, $file3,
- $port,$from_grid) =
+ $port, $from_grid, $offset) =
    read_file("$CONFIG_DIR/config",err_mode => 'quiet', chomp => 1);
 # default values if file can't be read
 unless (defined $pix_label1) {
   $port = '/dev/ttyS1';
   $pix_label1 = 'Default';
+  $offset = 273;
 }
 
 # compass rose outer radius in pixels
@@ -934,8 +939,12 @@ sub repeat_handler {
   # don't overwrite with current heading if direction entry has focus
   unless (defined $mw->focusCurrent 
           && $mw->focusCurrent == $$direction_entry_ref) {
-    $$text_direction_ref = int($heading) . "\N{DEGREE SIGN}";
+    my $t_heading = $heading - $offset;
+    if ($t_heading < 0) { $t_heading += 360 }
+    if ($t_heading > 360) { $t_heading -= 360 }
+    $$text_direction_ref = int($t_heading) . "\N{DEGREE SIGN}";
   }
+  $heading -= $offset;
   $heading -= 90; # adjust from rotors to Tk's idea of what angle represents
   $radians = $TAU*($heading/360); # cos, sin needs radians, not degrees
   $x = int ($RADIUS * cos $radians);
@@ -966,16 +975,24 @@ sub heading_line {
 sub new_heading_from_text {
   my ($widget, $line_ref, $text_ref) = @_;
 
+  my $deg;
   my $to_grid;
   my $call_prefix;
-  # grid square?
-  if (   $$text_ref =~ /^([A-Za-z][A-Za-z]\d\d[A-Za-z][A-Za-z])$/
-      || $$text_ref =~ /^([A-Za-z][A-Za-z]\d\d)$/) {
-    $to_grid = $1 }
-  else {
-    $call_prefix = $$text_ref;
+  if ($$text_ref =~ /^(\d+)$/) {
+    my $text_deg = $1;
+    return if $text_deg > 360;
+    $deg = int($text_deg);
   }
-  my $deg = heading_to($from_grid,$to_grid,$call_prefix);
+  # grid square?
+  if (!$deg && ($$text_ref =~ /^([a-z][a-z]\d\d[a-z][a-z])$/i
+               || $$text_ref =~ /^([a-z][a-z]\d\d)$/i)) {
+    $to_grid = $1;
+    $deg = heading_to($from_grid,$to_grid,$call_prefix);
+  }
+  elsif (!$deg) {
+    $call_prefix = $$text_ref;
+    $deg = heading_to($from_grid,$to_grid,$call_prefix);
+  }
   return if (! defined $deg);
   # place a red line at the new heading
   my $radians = $TAU*(($deg-90)/360); # cos, sin needs radians, not degrees
@@ -988,6 +1005,9 @@ sub new_heading_from_text {
                color => 'red' };
   heading_line($args);
   $deg = int $deg;
+  $deg = $deg+$offset;
+  if ($deg < 0) { $deg += 360 }
+  if ($deg > 360) { $deg -= 360 }
   $sp->write("$deg\r") if $sp;
 }
 
@@ -1011,6 +1031,9 @@ sub aim_it {
                color => 'red' };
   heading_line($args);
   $deg = int $deg;
+  $deg = $deg+$offset;
+  if ($deg < 0) { $deg += 360 }
+  if ($deg > 360) { $deg -= 360 }
   $sp->write("$deg\r") if $sp;
 }
 
@@ -1057,8 +1080,7 @@ sub save_and_hide {
        ($pix_label1 // ''),($file1 // ''),
        ($pix_label2 // ''),($file2 // ''),
        ($pix_label3 // ''),($file3 // ''),
-       $port,
-       ($from_grid // ''));
+       $port, ($from_grid // ''), ($offset // 0));
   @file_contents = map { $_ = "$_\n" } @file_contents;
 
   mkdir $CONFIG_DIR unless -d $CONFIG_DIR;
@@ -1119,11 +1141,14 @@ sub setup {
     $$setup_canvas->Label(-text => 'Grid Square')->grid
       ($$setup_canvas->Entry(-textvariable => \$from_grid,
                              -width => 40));
+    $$setup_canvas->Label(-text => 'Antenna Offset')->grid
+      ($$setup_canvas->Entry(-textvariable => \$offset,
+                             -width => 40));
     $$setup_canvas->Button
       (
        -text => 'Close',
        -command => [ \&save_and_hide, $setup_canvas ],
-      )->grid(-row => 6, -column => 1);
+      )->grid(-row => 7, -column => 1);
   }
   else {
     $$setup_canvas->deiconify();
@@ -1249,7 +1274,9 @@ sub tkhelp {
 
 Double click anywhere on the map to move the rotator to the desired direction.  A red line will appear showing where the rotator is moving to.  The rotator may over or undershoot a little, this is normal.
 
-You can also enter a callsign prefix or grid square into the Heading textbox.  Enter return to move the rotor to that location.  Set your grid square in the Setup menu first.'
+You can also enter a numeric heading, callsign prefix, or grid square into the Heading textbox.  Enter return to move the rotor to that location.  Set your grid square in the Setup menu first.
+
+If your antenna has slipped on the mast you can enter an offset in the setup menu to correct for the difference between what the rotator controller displays and the actual antenna heading.'
                    }],
                    [{-title => 'Serial port',
                      -header => 'Serial port',
